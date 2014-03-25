@@ -2,6 +2,8 @@ import os, re, json
 from urllib2 import Request, urlopen
 from urllib import quote
 
+#Test with filenames to both functions
+
 def findMovieId(name):
 	filename, extension = os.path.splitext(name)
 	title = None
@@ -60,7 +62,10 @@ def findMovieId(name):
 	data = json.loads(response_body)
 	if data["total_results"] != 0:
 		movieid = data["results"][0]["id"]
-		return {"title":title, "year":int(year), "id":movieid}
+		if year!= None:
+			return {"title":title, "year":int(year), "id":movieid}
+		else:
+			return {"title":title, "id":movieid}
 	else:
 		movieid = None
 		return {}
@@ -73,7 +78,7 @@ def findTvShowDetails(name):
 	    	flag = True
 	    	matches = re.findall(r"^((?P<series_name>.+?)[. _-]+)?s(?P<season_num>\d+)[. _-]*e(?P<ep_num>\d+)(([. _-]*e|-)(?P<extra_ep_num>(?!(1080|720)[pi])\d+))*[. _-]*((?P<extra_info>.+?)((?<![. _-])-(?P<release_group>[^-]+))?)?$", filename)
 	    	for match in matches:
-	    		show = match[0]
+	    		show = match[0].replace('.',' ').strip()
 	    		season = match[2]
 	    		episode = match[3]
 	    		flag =  False
@@ -81,12 +86,41 @@ def findTvShowDetails(name):
 	    	if flag:
 	    		matches = re.findall(r"^((?P<series_name>.+?)[\[. _-]+)?(?P<season_num>\d+)x(?P<ep_num>\d+)(([. _-]*x|-)(?P<extra_ep_num>(?!(1080|720)[pi])(?!(?<=x)264)\d+))*[\]. _-]*((?P<extra_info>.+?)((?<![. _-])-(?P<release_group>[^-]+))?)?$", filename)
 	    		for match in matches:
-	    			show = match[0]
+	    			show = match[0].replace('.',' ').strip()
 	    			season = match[2]
 	    			episode = match[3]
-	    			break
+	    			flag = False
+	    	if flag:
+	    		matches = re.findall(r"([\sA-Za-z'+-.]+)([sS])([\d][\d])([eE])([\d][\d])", filename)
+	    		for match in matches:
+	    			show = match[0].replace('.',' ').strip()
+	    			season = match[2]
+	    			episode = match[4]
 	if show == None:
 		return {}
 	if '-' in show:
 		show = show.replace('-', '').strip()
-	return {'show':show, 'season':season, 'episode':episode}
+	tvSearchUrl = "https://api.themoviedb.org/3/search/tv?api_key=72380f72d2ac93525738d2ef104c283d&"
+	url = tvSearchUrl+"query="+quote(show)
+	headers = {"Accept": "application/json"}
+	request = Request(url, headers=headers)
+	response_body = urlopen(request).read()
+	data = json.loads(response_body)
+	if data["total_results"]!=0:
+		return {'show':show, 'season':int(season), 'episode':int(episode), 'id':data["results"][0]["id"]}
+	else:
+		return {}
+
+def findResult(name):
+	result = findTvShowDetails(name)
+	if result != {}:
+		result.update({'status':'valid', 'type':'tv'})
+		return result
+	else:
+		result = findMovieId(name)
+		if result != {}:
+			result.update({'status':'valid', 'type':'movie'})
+			return result
+		else:
+			result = {'status':'invalid'}
+			return result
